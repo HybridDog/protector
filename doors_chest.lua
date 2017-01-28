@@ -565,6 +565,27 @@ minetest.register_node("protector:chest", {
 	on_blast = function() end,
 })
 
+if minetest.global_exists"connected_chests" then
+	connected_chests.register_chest("protector:chest", {
+		get_formspec = function(metatable, pos)
+			local spos = pos.x .. "," .. pos.y .. "," ..pos.z
+			--~ print(dump(metatable))
+			return  "size[13,9]"..
+				"list[nodemeta:".. spos .. ";main;0,0;13,5;]"..
+				"list[current_player;main;2.5,5.2;8,4;]"
+
+				.. "button[0,4.5;2,0.25;toup;" .. S("To Chest") .. "]"
+				.. "field[2.3,4.8;4,0.25;chestname;;"
+				.. (metatable.fields.name or "") .. "]"
+				.. "button[6,4.5;2,0.25;todn;" .. S("To Inventory") .. "]" ..
+
+				"listring[nodemeta:".. spos .. ";main]"..
+				"listring[current_player;main]"
+		end,
+		front = "connected_chests_front.png^[combine:8x16:8,0=protector_logo.png",
+	})
+end
+
 -- Protected Chest formspec buttons
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
@@ -596,7 +617,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 					end
 				end
 			end
-	
+
 		elseif fields.todn then
 
 			-- copy contents of chest to players inventory
