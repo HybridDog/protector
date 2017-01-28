@@ -583,6 +583,23 @@ if minetest.global_exists"connected_chests" then
 				"listring[current_player;main]"
 		end,
 		front = "connected_chests_front.png^[combine:8x16:8,0=protector_logo.png",
+		on_rightclick = function(pos, node, clicker)
+
+			if minetest.is_protected(pos, clicker:get_player_name()) then
+				return
+			end
+
+			local meta = minetest.get_meta(pos)
+
+			if not meta then
+				return
+			end
+
+			minetest.show_formspec(
+				clicker:get_player_name(),
+				"protector:chest_" .. minetest.pos_to_string(pos),
+				meta:get_string"formspec")
+		end,
 	})
 end
 
