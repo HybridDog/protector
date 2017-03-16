@@ -134,7 +134,7 @@ protector.generate_formspec = function(meta)
 
 		i = i + 1
 	end
-	
+
 	if i < npp then
 
 		-- user name entry field
@@ -173,98 +173,106 @@ local function inside_spawn(pos, radius)
 end
 
 
--- Infolevel:
--- 0 for no info
--- 1 for "This area is owned by <owner> !" if you can't dig
--- 2 for "This area is owned by <owner>.
--- 3 for checking protector overlaps
-
-protector.can_dig = function(r, pos, digger, onlyowner, infolevel)
-
-	if not digger
-	or not pos then
-		return false
-	end
-
-	-- delprotect and protector_bypass privileged users can override protection
-	if ( minetest.check_player_privs(digger, {delprotect = true})
-	or minetest.check_player_privs(digger, {protection_bypass = true}) )
-	and infolevel == 1 then
-		return true
-	end
-
-	-- infolevel 3 is only used to bypass priv check, change to 1 now
-	if infolevel == 3 then infolevel = 1 end
-
-	-- is spawn area protected ?
-	if inside_spawn(pos, protector.spawn) then
-
-		minetest.chat_send_player(digger,
-			S("Spawn @1 has been protected up to a @2 block radius.",
-			minetest.pos_to_string(statspawn), protector.spawn))
-
-		return false
-	end
+local function test_protection_blocks(pos, r, pname, level, onlyowner)
+	local minp = vector.add(pos, -r)
+	local maxp = vector.add(pos, r)
 
 	-- find the protector nodes
-	local pos = minetest.find_nodes_in_area(
-		{x = pos.x - r, y = pos.y - r, z = pos.z - r},
-		{x = pos.x + r, y = pos.y + r, z = pos.z + r},
+	local ps = minetest.find_nodes_in_area(minp, maxp,
 		{"protector:protect", "protector:protect2"})
 
-	local meta, owner, members
+	for n = 1, #ps do
 
-	for n = 1, #pos do
+		local meta = minetest.get_meta(ps[n])
+		local owner = meta:get_string("owner") or ""
 
-		meta = minetest.get_meta(pos[n])
-		owner = meta:get_string("owner") or ""
-		members = meta:get_string("members") or ""
-
-		-- node change and digger isn't owner
-		if owner ~= digger
-		and infolevel == 1 then
+		-- node change and pname isn't owner
+		if owner ~= pname
+		and level == 1 then
 
 			-- and you aren't on the member list
 			if onlyowner
-			or not protector.is_member(meta, digger) then
+			or not protector.is_member(meta, pname) then
 
-				minetest.chat_send_player(digger,
+				minetest.chat_send_player(pname,
 					S("This area is owned by @1!", owner))
 
-					return false
+				return false
 			end
 		end
 
 		-- when using protector as tool, show protector information
-		if infolevel == 2 then
+		if level == 2 then
 
-			minetest.chat_send_player(digger,
-			S("This area is owned by @1.", owner))
+			minetest.chat_send_player(pname,
+				S("This area is owned by @1.", owner))
 
-			minetest.chat_send_player(digger,
-			S("Protection located at: @1", minetest.pos_to_string(pos[n])))
+			minetest.chat_send_player(pname,
+				S("Protection located at: @1", minetest.pos_to_string(ps[n])))
 
+			local members = meta:get_string("members") or ""
 			if members ~= "" then
 
-				minetest.chat_send_player(digger,
-				S("Members: @1.", members))
+				minetest.chat_send_player(pname,
+					S("Members: @1.", members))
 			end
 
 			return false
 		end
 
 	end
+	return true, #ps == 0
+end
+
+-- Infolevel:
+-- 0 for no info
+-- 1 for "This area is owned by <owner> !" if you can't dig
+-- 2 for "This area is owned by <owner>.
+-- 3 for checking protector overlaps
+
+protector.can_dig = function(r, pos, pname, onlyowner, level)
+
+	if not pname
+	or not pos then
+		return false
+	end
+
+	-- delprotect and protector_bypass privileged users can override protection
+	if ( minetest.check_player_privs(pname, {delprotect = true})
+	or minetest.check_player_privs(pname, {protection_bypass = true}) )
+	and level == 1 then
+		return true
+	end
+
+	-- level 3 is only used to bypass priv check, change to 1 now
+	if level == 3 then level = 1 end
+
+	-- is spawn area protected ?
+	if inside_spawn(pos, protector.spawn) then
+
+		minetest.chat_send_player(pname,
+			S("Spawn @1 has been protected up to a @2 block radius.",
+			minetest.pos_to_string(statspawn), protector.spawn))
+
+		return false
+	end
+
+	local succ, is_free = test_protection_blocks(
+		pos, r, pname, level, onlyowner)
+	if not succ then
+		return
+	end
 
 	-- show when you can build on unprotected area
-	if infolevel == 2 then
+	if level == 2 then
 
-		if #pos < 1 then
+		if is_free then
 
-			minetest.chat_send_player(digger,
-			S("This area is not protected."))
+			minetest.chat_send_player(pname,
+				S("This area is not protected."))
 		end
 
-		minetest.chat_send_player(digger, S("You can build here."))
+		minetest.chat_send_player(pname, S("You can build here."))
 	end
 
 	return true
@@ -433,7 +441,7 @@ minetest.register_node("protector:protect", {
 
 		if meta
 		and protector.can_dig(1, pos,clicker:get_player_name(), true, 1) then
-			minetest.show_formspec(clicker:get_player_name(), 
+			minetest.show_formspec(clicker:get_player_name(),
 			"protector:node_" .. minetest.pos_to_string(pos), protector.generate_formspec(meta))
 		end
 	end,
@@ -514,7 +522,7 @@ minetest.register_node("protector:protect2", {
 
 		if protector.can_dig(1, pos, clicker:get_player_name(), true, 1) then
 
-			minetest.show_formspec(clicker:get_player_name(), 
+			minetest.show_formspec(clicker:get_player_name(),
 			"protector:node_" .. minetest.pos_to_string(pos), protector.generate_formspec(meta))
 		end
 	end,
